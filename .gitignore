@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+.venv/
+backend/test_outputs/
+test_outputs/
+
+# Large Model Weights (>100MB GitHub limit)
+backend/models/*.onnx
+backend/models/.u2net/
+models/*.onnx
+*.onnx
+*.tflite
+
+# Node & React Native
+node_modules/
+mobile/node_modules/
+.expo/
+mobile/.expo/
+mobile/dist/
+npm-debug.log*
+yarn-debug.log*
+
+# Android Native Builds
+*.apk
+*.aab
+mobile/android/.gradle/
+mobile/android/.gradle_home/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/local.properties
+.gradle/
+
+# OS and Environment
+.env
+.env.local
+.DS_Store
+Thumbs.db

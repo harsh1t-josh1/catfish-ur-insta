@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+backend/test_outputs/
+
+# Node / React Native
+node_modules/
+mobile/node_modules/
+mobile/dist/
+.expo/
+mobile/.expo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Android
+*.orig
+*.apk
+*.aab
+mobile/android/.gradle/
+mobile/android/.gradle_home/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/local.properties
+
+# Environment
+.env
+.env.local
+.DS_Store
+Thumbs.db
