@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Pose Studio AI",
+    "slug": "pose-recreation-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0A0A0C"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0C"
+      },
+      "package": "com.instafreak.poserecreation",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Pose Studio to access your camera to guide and capture your poses."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Pose Studio to access your photos to select reference images and save recreated photographs."
+        }
+      ]
+    ]
+  }
+}
