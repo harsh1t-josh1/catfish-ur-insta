@@ -60,6 +60,9 @@ export const PoseReferenceScreen: React.FC<PoseReferenceScreenProps> = ({ onBack
   const [multiplePersonsModal, setMultiplePersonsModal] = useState<boolean>(false);
   const [detectedPersons, setDetectedPersons] = useState<DetectedPerson[]>([]);
 
+  // Camera zoom control
+  const [cameraZoom, setCameraZoom] = useState<number>(0);
+
   // Ghost overlay controls
   const [opacity, setOpacity] = useState<number>(0.55);
   const [scale, setScale] = useState<number>(1.0);
@@ -130,14 +133,18 @@ export const PoseReferenceScreen: React.FC<PoseReferenceScreenProps> = ({ onBack
   const handlePickReferenceImage = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 1,
+        quality: 0.9,
+        base64: true,
       });
 
       if (!res.canceled && res.assets[0]?.uri) {
         setAnalyzing(true);
-        const analysis = await analyzeReferencePhoto(res.assets[0].uri);
+        const analysis = await analyzeReferencePhoto(
+          res.assets[0].uri,
+          res.assets[0].base64 || undefined
+        );
         setRefData(analysis);
 
         if (analysis.multiple_persons && analysis.persons.length > 1) {
@@ -341,9 +348,10 @@ export const PoseReferenceScreen: React.FC<PoseReferenceScreenProps> = ({ onBack
       {/* Live Camera Feed */}
       <CameraView
         ref={cameraRef}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         facing={cameraType}
         flash={flash}
+        zoom={cameraZoom}
       />
 
       {/* Ghost Overlay: Transparent Reference Person */}
@@ -550,6 +558,37 @@ export const PoseReferenceScreen: React.FC<PoseReferenceScreenProps> = ({ onBack
         </View>
       )}
 
+      {/* Camera Zoom Selector */}
+      <View style={styles.zoomBar}>
+        {[
+          { label: '1x', val: 0.0 },
+          { label: '2x', val: 0.15 },
+          { label: '3x', val: 0.3 },
+          { label: '5x', val: 0.5 },
+        ].map((item, idx) => (
+          <TouchableOpacity
+            key={idx}
+            style={[
+              styles.zoomPill,
+              Math.abs(cameraZoom - item.val) < 0.05 && styles.zoomPillActive,
+            ]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setCameraZoom(item.val);
+            }}
+          >
+            <Text
+              style={[
+                styles.zoomPillText,
+                Math.abs(cameraZoom - item.val) < 0.05 && styles.zoomPillTextActive,
+              ]}
+            >
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* Bottom Shutter & Controls Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
@@ -670,7 +709,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   ghostOverlayContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -857,6 +896,35 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontWeight: '600',
   },
+  zoomBar: {
+    position: 'absolute',
+    bottom: 110,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: 'rgba(20, 20, 28, 0.75)',
+    borderRadius: theme.borderRadius.full,
+    padding: 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    zIndex: 10,
+  },
+  zoomPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  zoomPillActive: {
+    backgroundColor: theme.colors.primaryLight,
+  },
+  zoomPillText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zoomPillTextActive: {
+    color: '#000',
+  },
   bottomBar: {
     position: 'absolute',
     bottom: 25,
@@ -894,7 +962,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   loadingBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',

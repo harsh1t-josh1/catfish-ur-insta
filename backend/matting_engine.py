@@ -25,47 +25,54 @@ class MattingEngine:
     def remove_background(self, image_pil: Image.Image) -> Image.Image:
         """
         Removes background from image, preserving hair and fine edges.
-        Returns RGBA PIL Image.
+        Uses U2Net Human Seg deep learning neural network.
+        Fast inference (~400ms) with clean alpha antialiasing.
         """
         result = rembg.remove(
             image_pil,
             session=self.session,
-            alpha_matting=True,
-            alpha_matting_foreground_threshold=240,
-            alpha_matting_background_threshold=10,
-            alpha_matting_erode_size=10
+            alpha_matting=False
         )
         return result
 
-    def detect_multiple_persons(self, image_bgr: np.ndarray) -> List[Dict[str, Any]]:
+    def detect_multiple_persons(
+        self,
+        image_bgr: np.ndarray,
+        alpha_mask: Optional[np.ndarray] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Detects multiple persons in an image and returns their bounding boxes and crops.
+        Detects multiple distinct persons in an image using connected segmentation analysis.
+        Robust, fast, and does not depend on legacy cv2 HOGDescriptor.
         """
-        h, w, _ = image_bgr.shape
-        # Use HOG descriptor with default people detector
-        hog = cv2.HOGDescriptor()
-        hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+        h, w = image_bgr.shape[:2]
+        if alpha_mask is None:
+            # Generate alpha mask from RGB image if not provided
+            rgb_pil = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+            cutout = self.remove_background(rgb_pil)
+            alpha_mask = np.array(cutout)[:, :, 3]
 
-        boxes, weights = hog.detectMultiScale(
-            image_bgr,
-            winStride=(8, 8),
-            padding=(16, 16),
-            scale=1.05
-        )
+        # Find connected components in the alpha mask
+        _, binary = cv2.threshold(alpha_mask, 50, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        min_area = (w * h) * 0.04  # At least 4% of image area to be considered a person
         detected_persons = []
-        if len(boxes) > 1:
-            for idx, (x, y, bw, bh) in enumerate(boxes):
+        person_id = 1
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area >= min_area:
+                x, y, bw, bh = cv2.boundingRect(cnt)
                 # Expand box slightly for context
-                pad_x = int(bw * 0.1)
-                pad_y = int(bh * 0.1)
+                pad_x = int(bw * 0.08)
+                pad_y = int(bh * 0.08)
                 x_min = max(0, x - pad_x)
                 y_min = max(0, y - pad_y)
                 x_max = min(w, x + bw + pad_x)
                 y_max = min(h, y + bh + pad_y)
 
                 detected_persons.append({
-                    "id": idx + 1,
+                    "id": person_id,
                     "bbox": {
                         "x": int(x_min),
                         "y": int(y_min),
@@ -79,7 +86,10 @@ class MattingEngine:
                         "height": round((y_max - y_min) / h, 3)
                     }
                 })
+                person_id += 1
 
+        # Sort left-to-right
+        detected_persons.sort(key=lambda p: p["bbox"]["x"])
         return detected_persons
 
     @staticmethod

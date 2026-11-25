@@ -106,16 +106,20 @@ async def analyze_reference(
         raise HTTPException(status_code=400, detail="No image provided")
 
     # Resize if extremely large to prevent OOM while keeping high quality
-    max_dim = 1600
+    max_dim = 1200
     if max(pil_img.size) > max_dim:
         pil_img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
     np_bgr = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
 
-    # 1. Multi-person detection
-    detected_persons = matting_engine.detect_multiple_persons(np_bgr)
+    # 1. Transparent background removal for ghost overlay (fast U2Net without Laplacian overhead)
+    cutout_rgba = matting_engine.remove_background(pil_img)
+    alpha_mask = np.array(cutout_rgba)[:, :, 3]
 
-    # 2. Pose detection
+    # 2. Multi-person detection from human segmentation mask
+    detected_persons = matting_engine.detect_multiple_persons(np_bgr, alpha_mask=alpha_mask)
+
+    # 3. Pose detection
     pose_results = pose_engine.detect_landmarks(np_bgr)
     if not pose_results:
         # Fallback with less strict detector if initial detection misses
@@ -124,8 +128,6 @@ async def analyze_reference(
             detail="No person pose detected in the reference photograph. Please upload a clear photo containing a person."
         )
 
-    # 3. Transparent background removal for ghost overlay
-    cutout_rgba = matting_engine.remove_background(pil_img)
     ghost_overlay_b64 = matting_engine.pil_to_base64_png(cutout_rgba)
     original_b64 = matting_engine.pil_to_base64_jpeg(pil_img, quality=85)
 
@@ -220,6 +222,13 @@ async def recreate_photo(req: RecreatePhotoRequest):
     """
     ref_pil = base64_to_pil(req.ref_image_base64)
     user_pil = base64_to_pil(req.user_image_base64)
+
+    # Scale high-res mobile captures for fast, responsive processing
+    max_dim = 1400
+    if max(ref_pil.size) > max_dim:
+        ref_pil.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+    if max(user_pil.size) > max_dim:
+        user_pil.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
     # Extract user subject
     user_cutout = matting_engine.remove_background(user_pil)

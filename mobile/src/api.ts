@@ -1,7 +1,26 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
 
-// Default backend URL: 10.0.2.2 is host loopback for Android emulator, 127.0.0.1 for web, or configurable LAN IP
-let BACKEND_URL = 'http://10.0.2.2:8000';
+// Determine initial backend URL automatically based on Expo Metro host IP
+const getDefaultBackendUrl = (): string => {
+  try {
+    const hostUri =
+      Constants.expoConfig?.hostUri ||
+      (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+      (Constants as any)?.manifest?.debuggerHost;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+        return `http://${ip}:8000`;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return 'http://10.244.68.241:8000';
+};
+
+let BACKEND_URL = getDefaultBackendUrl();
 
 export const setBackendUrl = (url: string) => {
   BACKEND_URL = url.trim().replace(/\/+$/, '');
@@ -69,14 +88,18 @@ export const checkHealth = async (): Promise<boolean> => {
 };
 
 export const analyzeReferencePhoto = async (
-  imageUri: string
+  imageUri: string,
+  preloadedBase64?: string
 ): Promise<AnalyzeReferenceResponse> => {
-  const base64 = await FileSystem.readAsStringAsync(imageUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  let base64 = preloadedBase64;
+  if (!base64) {
+    base64 = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
 
   const formData = new FormData();
-  formData.append('image_base64', `data:image/jpeg;base64,${base64}`);
+  formData.append('image_base64', base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`);
 
   const res = await fetch(`${BACKEND_URL}/api/analyze-reference`, {
     method: 'POST',
@@ -132,18 +155,26 @@ export const recreatePhoto = async (
     yOffsetPct?: number;
     scaleMult?: number;
     lightingStrength?: number;
+    userBase64?: string;
   } = {}
 ): Promise<RecreatePhotoResponse> => {
-  const userBase64Raw = await FileSystem.readAsStringAsync(userImageUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  let userBase64Raw = options.userBase64;
+  if (!userBase64Raw) {
+    userBase64Raw = await FileSystem.readAsStringAsync(userImageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
+
+  const userImagePayload = userBase64Raw.startsWith('data:')
+    ? userBase64Raw
+    : `data:image/jpeg;base64,${userBase64Raw}`;
 
   const res = await fetch(`${BACKEND_URL}/api/recreate-photo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ref_image_base64: refImageBase64,
-      user_image_base64: `data:image/jpeg;base64,${userBase64Raw}`,
+      user_image_base64: userImagePayload,
       ref_bbox: options.refBbox,
       x_offset_pct: options.xOffsetPct || 0.0,
       y_offset_pct: options.yOffsetPct || 0.0,

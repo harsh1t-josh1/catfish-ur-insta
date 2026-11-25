@@ -14,7 +14,7 @@ import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-ca
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import {
   Camera as CameraIcon,
@@ -52,6 +52,9 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
   const [refImageUri, setRefImageUri] = useState<string | null>(null);
   const [refImageBase64, setRefImageBase64] = useState<string | null>(null);
 
+  // Camera zoom control
+  const [cameraZoom, setCameraZoom] = useState<number>(0);
+
   // Camera overlay controls
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.5);
   const [overlayScale, setOverlayScale] = useState<number>(1.0);
@@ -82,21 +85,26 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
   const handlePickReferencePhoto = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 1,
+        quality: 0.9,
+        base64: true,
       });
 
       if (!res.canceled && res.assets[0]?.uri) {
         setRefImageUri(res.assets[0].uri);
-        const b64 = await FileSystem.readAsStringAsync(res.assets[0].uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        setRefImageBase64(`data:image/jpeg;base64,${b64}`);
+        if (res.assets[0].base64) {
+          setRefImageBase64(`data:image/jpeg;base64,${res.assets[0].base64}`);
+        } else {
+          const b64 = await FileSystem.readAsStringAsync(res.assets[0].uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          setRefImageBase64(`data:image/jpeg;base64,${b64}`);
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err: any) {
-      Alert.alert('Selection Error', 'Could not load reference image.');
+      Alert.alert('Selection Error', err.message || 'Could not load reference image.');
     }
   };
 
@@ -111,6 +119,7 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.95,
+        base64: true,
       });
       setUserCapturedUri(photo.uri);
 
@@ -126,11 +135,14 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
         setProcessingStep('3/3: Placing into original background with contact shadow...');
       }, 2400);
 
+      const userB64 = photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : undefined;
+
       const res = await recreatePhoto(refImageBase64, photo.uri, {
         scaleMult,
         lightingStrength,
         xOffsetPct: xOffset,
         yOffsetPct: yOffset,
+        userBase64: userB64,
       });
 
       setRecreateResult(res);
@@ -447,6 +459,7 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
         style={StyleSheet.absoluteFill}
         facing={cameraType}
         flash={flash}
+        zoom={cameraZoom}
       />
 
       {/* Semi-Transparent Reference Photograph Overlay */}
@@ -590,6 +603,37 @@ export const PhotoRecreationScreen: React.FC<PhotoRecreationScreenProps> = ({ on
           </View>
         </View>
       )}
+
+      {/* Camera Zoom Selector */}
+      <View style={styles.zoomBar}>
+        {[
+          { label: '1x', val: 0.0 },
+          { label: '2x', val: 0.15 },
+          { label: '3x', val: 0.3 },
+          { label: '5x', val: 0.5 },
+        ].map((item, idx) => (
+          <TouchableOpacity
+            key={idx}
+            style={[
+              styles.zoomPill,
+              Math.abs(cameraZoom - item.val) < 0.05 && styles.zoomPillActive,
+            ]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setCameraZoom(item.val);
+            }}
+          >
+            <Text
+              style={[
+                styles.zoomPillText,
+                Math.abs(cameraZoom - item.val) < 0.05 && styles.zoomPillTextActive,
+              ]}
+            >
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Bottom Bar */}
       <View style={styles.bottomBar}>
@@ -790,6 +834,35 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  zoomBar: {
+    position: 'absolute',
+    bottom: 110,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: 'rgba(20, 20, 28, 0.75)',
+    borderRadius: theme.borderRadius.full,
+    padding: 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    zIndex: 10,
+  },
+  zoomPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  zoomPillActive: {
+    backgroundColor: theme.colors.accentGold,
+  },
+  zoomPillText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zoomPillTextActive: {
+    color: '#000',
   },
   bottomBar: {
     position: 'absolute',

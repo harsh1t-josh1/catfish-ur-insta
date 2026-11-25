@@ -5,11 +5,11 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  StatusBar,
   Modal,
   TextInput,
   Alert,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import {
   Camera,
   Layers,
@@ -66,7 +66,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
